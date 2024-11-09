@@ -1,3 +1,4 @@
+
 import azure.functions as func
 import logging
 from selenium import webdriver
@@ -44,7 +45,6 @@ class AzureScraper:
     def setup_logging(self):
         """Configure logging"""
         self.logger = logging.getLogger('azure.func.AzureScraper')
-        # Add more detailed logging
         logging.basicConfig(level=logging.INFO)
 
     def setup_blob_storage(self):
@@ -58,7 +58,6 @@ class AzureScraper:
             self.blob_service_client = BlobServiceClient.from_connection_string(connect_str)
             self.container_name = "scraper-data"
             
-            # Create container if it doesn't exist
             try:
                 container_client = self.blob_service_client.get_container_client(self.container_name)
                 container_client.get_container_properties()
@@ -105,6 +104,7 @@ class AzureScraper:
             if self.driver.current_url != self.url:
                 self.logger.info(f"Navigating to {self.url}")
                 self.driver.get(self.url)
+                time.sleep(5)  # Wait for page to load
 
             self.logger.info("Getting multiplier...")
             multiplier_element = self.wait.until(
@@ -170,13 +170,21 @@ class AzureScraper:
 @app.schedule(schedule="*/5 * * * *", arg_name="timer", run_on_startup=True)
 def scraper_trigger(timer: func.TimerRequest) -> None:
     """Azure Function timer trigger to run the scraper every 5 minutes"""
-    logging.info('Scraper function triggered')
+    logging.info('================ SCRAPER FUNCTION STARTED ================')
+    logging.info(f'Function triggered at: {datetime.now().isoformat()}')
+    
+    # Check environment
+    logging.info('Checking environment variables...')
+    storage_connection = os.getenv('AzureWebJobsStorage')
+    logging.info(f'Storage connection string exists: {bool(storage_connection)}')
     
     scraper = None
     try:
+        logging.info('Initializing scraper...')
         scraper = AzureScraper()
-        logging.info("Scraper initialized")
+        logging.info('Scraper initialized successfully')
         
+        logging.info('Getting current values...')
         multiplier, online, playing, timestamp = scraper.get_current_values()
         
         if all(v is not None for v in [multiplier, online, playing, timestamp]):
@@ -186,8 +194,11 @@ def scraper_trigger(timer: func.TimerRequest) -> None:
                 'online': online,
                 'playing': playing
             }
+            logging.info(f'Got values successfully: {json.dumps(data)}')
+            
+            logging.info('Saving to blob storage...')
             scraper.save_to_blob(data)
-            logging.info(f"Successfully scraped and saved data: {json.dumps(data)}")
+            logging.info('Successfully saved to blob storage')
         else:
             logging.error("Failed to get valid values from the website")
             
@@ -196,4 +207,8 @@ def scraper_trigger(timer: func.TimerRequest) -> None:
         logging.error(f"Traceback: {traceback.format_exc()}")
     finally:
         if scraper:
+            logging.info('Cleaning up scraper...')
             scraper.cleanup()
+            
+    logging.info('================ SCRAPER FUNCTION COMPLETED ================')
+
