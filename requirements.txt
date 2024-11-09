@@ -1,0 +1,7 @@
+
+azure-functions
+azure-storage-blob
+pandas
+selenium
+webdriver_manager
+python-dotenv
